@@ -65,7 +65,15 @@ def _include_fullname_in_traceback(f):
     Debugging this is a bit tricky, because, well, we can't repr() in the traceback either then.
     This decorator adds location information to the traceback, which helps tracking down bugs.
     """
-    pass
+
+    @wraps(f)
+    def wrapper(self):
+        try:
+            return f(self)
+        except Exception as e:
+            raise RuntimeError(f"Error in {self.fullname}'s repr!") from e
+
+    return wrapper
 
 
 T = TypeVar("T")
