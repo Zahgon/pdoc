@@ -65,15 +65,7 @@ def _include_fullname_in_traceback(f):
     Debugging this is a bit tricky, because, well, we can't repr() in the traceback either then.
     This decorator adds location information to the traceback, which helps tracking down bugs.
     """
-
-    @wraps(f)
-    def wrapper(self):
-        try:
-            return f(self)
-        except Exception as e:
-            raise RuntimeError(f"Error in {self.fullname}'s repr!") from e
-
-    return wrapper
+    pass
 
 
 T = TypeVar("T")
@@ -123,11 +115,7 @@ class Doc(Generic[T]):
 
     @property
     def type(self) -> str:  # pragma: no cover
-        warnings.warn(
-            "pdoc.doc.Doc.type is deprecated. Use pdoc.doc.Doc.kind instead.",
-            DeprecationWarning,
-        )
-        return self.kind
+        pass
 
     def __init__(
         self, modulename: str, qualname: str, obj: T, taken_from: tuple[str, str]
@@ -146,13 +134,12 @@ class Doc(Generic[T]):
     @cached_property
     def fullname(self) -> str:
         """The full qualified name of this doc object, for example `pdoc.doc.Doc`."""
-        # qualname is empty for modules
-        return f"{self.modulename}.{self.qualname}".rstrip(".")
+        pass
 
     @cached_property
     def name(self) -> str:
         """The name of this object. For top-level functions and classes, this is equal to the qualname attribute."""
-        return self.fullname.split(".")[-1]
+        pass
 
     @cached_property
     def docstring(self) -> str:
@@ -161,7 +148,7 @@ class Doc(Generic[T]):
 
         If no docstring can be found, an empty string is returned.
         """
-        return _safe_getdoc(self.obj)
+        pass
 
     @cached_property
     def source(self) -> str:
@@ -171,15 +158,12 @@ class Doc(Generic[T]):
         If the source cannot be obtained (for example, because we are dealing with a native C object),
         an empty string is returned.
         """
-        return doc_ast.get_source(self.obj)
+        pass
 
     @cached_property
     def source_file(self) -> Path | None:
         """The name of the Python source file in which this object was defined. `None` for built-in objects."""
-        try:
-            return Path(inspect.getsourcefile(self.obj) or inspect.getfile(self.obj))  # type: ignore
-        except TypeError:
-            return None
+        pass
 
     @cached_property
     def source_lines(self) -> tuple[int, int] | None:
@@ -188,11 +172,7 @@ class Doc(Generic[T]):
 
         If no source file can be found, `None` is returned.
         """
-        try:
-            lines, start = inspect.getsourcelines(self.obj)  # type: ignore
-            return start, start + len(lines) - 1
-        except Exception:
-            return None
+        pass
 
     @cached_property
     def is_inherited(self) -> bool:
@@ -202,7 +182,7 @@ class Doc(Generic[T]):
         but can also apply to variables that are assigned a class defined
         in a different module.
         """
-        return (self.modulename, self.qualname) != self.taken_from
+        pass
 
     def __lt__(self, other):
         assert isinstance(other, Doc)
@@ -257,125 +237,24 @@ class Namespace(Doc[U], metaclass=ABCMeta):
         This mapping includes private members; they are only filtered out as part of the template logic.
         Constructors for enums, dicts, and abstract base classes are not picked up unless they have a custom docstring.
         """
-        members: dict[str, Doc] = {}
-        for name, obj in self._member_objects.items():
-            qualname = f"{self.qualname}.{name}".lstrip(".")
-            taken_from = self._taken_from(name, obj)
-            doc: Doc[Any]
-
-            is_classmethod = isinstance(obj, classmethod)
-            is_property = (
-                isinstance(obj, (property, cached_property))
-                or
-                # Python 3.9 - 3.10: @classmethod @property is allowed.
-                is_classmethod
-                and isinstance(obj.__func__, (property, cached_property))
-            )
-            if is_property:
-                func = obj
-                if is_classmethod:
-                    func = obj.__func__
-                if isinstance(func, property):
-                    func = func.fget
-                else:
-                    assert isinstance(func, cached_property)
-                    func = func.func
-
-                doc_f = Function(self.modulename, qualname, func, taken_from)
-                doc = Variable(
-                    self.modulename,
-                    qualname,
-                    docstring=doc_f.docstring,
-                    annotation=doc_f.signature.return_annotation,
-                    default_value=empty,
-                    taken_from=taken_from,
-                )
-                doc.source = doc_f.source
-                doc.source_file = doc_f.source_file
-                doc.source_lines = doc_f.source_lines
-            elif inspect.isroutine(obj):
-                doc = Function(self.modulename, qualname, obj, taken_from)  # type: ignore
-            elif (
-                inspect.isclass(obj)
-                and obj is not empty
-                and not isinstance(obj, GenericAlias)
-                and obj.__qualname__.rpartition(".")[2] == qualname.rpartition(".")[2]
-            ):
-                # `dict[str,str]` is a GenericAlias instance. We want to render type aliases as variables though.
-                doc = Class(self.modulename, qualname, obj, taken_from)
-            elif inspect.ismodule(obj):
-                if os.environ.get("PDOC_SUBMODULES"):  # pragma: no cover
-                    doc = Module.from_name(obj.__name__)
-                else:
-                    continue
-            elif inspect.isdatadescriptor(obj):
-                doc = Variable(
-                    self.modulename,
-                    qualname,
-                    docstring=getattr(obj, "__doc__", None) or "",
-                    annotation=self._var_annotations.get(name, empty),
-                    default_value=empty,
-                    taken_from=taken_from,
-                )
-            else:
-                doc = Variable(
-                    self.modulename,
-                    qualname,
-                    docstring="",
-                    annotation=self._var_annotations.get(name, empty),
-                    default_value=_pydantic.default_value(self.obj, name, obj),
-                    taken_from=taken_from,
-                )
-
-            if _doc := _pydantic.get_field_docstring(cast(type, self.obj), name):
-                doc.docstring = _doc
-            elif self._var_docstrings.get(name):
-                doc.docstring = self._var_docstrings[name]
-            elif self._func_docstrings.get(name) and not doc.docstring:
-                doc.docstring = self._func_docstrings[name]
-
-            members[doc.name] = doc
-
-        if isinstance(self, Module):
-            # quirk: doc_pyi expects .members to be set already
-            self.members = members  # type: ignore
-            doc_pyi.include_typeinfo_from_stub_files(self)
-
-        return members
+        pass
 
     @cached_property
     def _members_by_origin(self) -> dict[tuple[str, str], list[Doc]]:
         """A mapping from (modulename, qualname) locations to the attributes taken from that path"""
-        locations: dict[tuple[str, str], list[Doc]] = {}
-        for member in self.members.values():
-            mod, qualname = member.taken_from
-            parent_qualname = ".".join(qualname.rsplit(".", maxsplit=1)[:-1])
-            locations.setdefault((mod, parent_qualname), [])
-            locations[(mod, parent_qualname)].append(member)
-        return locations
+        pass
 
     @cached_property
     def inherited_members(self) -> dict[tuple[str, str], list[Doc]]:
         """A mapping from (modulename, qualname) locations to the attributes inherited from that path"""
-        return {
-            k: v
-            for k, v in self._members_by_origin.items()
-            if k not in (self.taken_from, (self.modulename, self.qualname))
-        }
+        pass
 
     @cached_property
     def flattened_own_members(self) -> list[Doc]:
         """
         A list of all documented members and their child classes, recursively.
         """
-        flattened = []
-        for x in self.own_members:
-            flattened.append(x)
-            if isinstance(x, Class):
-                flattened.extend(
-                    [cls for cls in x.flattened_own_members if isinstance(cls, Class)]
-                )
-        return flattened
+        pass
 
     @cache
     def get(self, identifier: str) -> Doc | None:
@@ -427,156 +306,60 @@ class Module(Namespace[types.ModuleType]):
         Typically, this means that this file is in a directory named like the
         module with the name `__init__.py`.
         """
-        return _safe_getattr(self.obj, "__path__", None) is not None
+        pass
 
     @cached_property
     def _var_docstrings(self) -> dict[str, str]:
-        return doc_ast.walk_tree(self.obj).var_docstrings
+        pass
 
     @cached_property
     def _func_docstrings(self) -> dict[str, str]:
-        return doc_ast.walk_tree(self.obj).func_docstrings
+        pass
 
     @cached_property
     def _var_annotations(self) -> dict[str, Any]:
-        annotations = doc_ast.walk_tree(self.obj).annotations.copy()
-        for k, v in _safe_getattr(self.obj, "__annotations__", {}).items():
-            annotations[k] = v
-
-        return resolve_annotations(annotations, self.obj, None, self.fullname)
+        pass
 
     def _taken_from(self, member_name: str, obj: Any) -> tuple[str, str]:
-        if obj is empty:
-            return self.modulename, f"{self.qualname}.{member_name}".lstrip(".")
-        if isinstance(obj, types.ModuleType):
-            return obj.__name__, ""
-
-        mod = _safe_getattr(obj, "__module__", None)
-        qual = _safe_getattr(obj, "__qualname__", None)
-        if mod and isinstance(qual, str) and "<locals>" not in qual:
-            return mod, qual
-        else:
-            # This might be wrong, but it's the best guess we have.
-            return (mod or self.modulename), f"{self.qualname}.{member_name}".lstrip(
-                "."
-            )
+        pass
 
     @cached_property
     def own_members(self) -> list[Doc]:
-        return list(self.members.values())
+        pass
 
     @cached_property
     def submodules(self) -> list[Module]:
         """A list of all (direct) submodules."""
-        include: Callable[[str], bool]
-        mod_all = _safe_getattr(self.obj, "__all__", False)
-        if mod_all is not False:
-            mod_all_pos = {name: i for i, name in enumerate(mod_all)}
-            include = mod_all_pos.__contains__
-        else:
-
-            def include(name: str) -> bool:
-                # optimization: we don't even try to load modules starting with an underscore as they would not be
-                # visible by default. The downside of this is that someone who overrides `is_public` will miss those
-                # entries, the upsides are 1) better performance and 2) less warnings because of import failures
-                # (think of OS-specific modules, e.g. _linux.py failing to import on Windows).
-                return not name.startswith("_")
-
-        submodules: list[Module] = []
-        for mod_name, mod in extract.iter_modules2(self.obj).items():
-            if not include(mod_name):
-                continue
-            try:
-                module = Module.from_name(mod.name)
-            except RuntimeError:
-                warnings.warn(f"Couldn't import {mod.name}:\n{traceback.format_exc()}")
-                continue
-            submodules.append(module)
-
-        if mod_all:
-            submodules = sorted(submodules, key=lambda m: mod_all_pos[m.name])
-
-        return submodules
+        pass
 
     @cached_property
     def _ast_keys(self) -> set[str]:
-        return (
-            self._var_docstrings.keys()
-            | self._func_docstrings.keys()
-            | self._var_annotations.keys()
-        )
+        pass
 
     @cached_property
     def _member_objects(self) -> dict[str, Any]:
-        members = {}
-
-        all_: list[str] | None = _safe_getattr(self.obj, "__all__", None)
-        if all_ is not None:
-            for name in all_:
-                if not isinstance(name, str):
-                    # Gracefully handle the case where objects are directly specified in __all__.
-                    name = _safe_getattr(name, "__name__", str(name))
-                if name in self.obj.__dict__:
-                    val = self.obj.__dict__[name]
-                elif name in self._var_annotations:
-                    val = empty
-                else:
-                    # this may be an unimported submodule, try importing.
-                    # (https://docs.python.org/3/tutorial/modules.html#importing-from-a-package)
-                    try:
-                        val = extract.load_module(f"{self.modulename}.{name}")
-                    except RuntimeError as e:
-                        warnings.warn(
-                            f"Found {name!r} in {self.modulename}.__all__, but it does not resolve: {e}"
-                        )
-                        val = empty
-                members[name] = val
-
-        else:
-            # Starting with Python 3.10, __annotations__ is created on demand,
-            # so we make a copy here as obj.__dict__ is changed while we iterate over it.
-            # Additionally, accessing self._ast_keys may lead to the execution of TYPE_CHECKING blocks,
-            # which may also modify obj.__dict__. (https://github.com/mitmproxy/pdoc/issues/351)
-            for name, obj in list(self.obj.__dict__.items()):
-                # We already exclude everything here that is imported.
-                obj_module = inspect.getmodule(obj)
-                declared_in_this_module = self.obj.__name__ == _safe_getattr(
-                    obj_module, "__name__", None
-                )
-                include_in_docs = declared_in_this_module or name in self._ast_keys
-                if include_in_docs:
-                    members[name] = obj
-
-            for name in self._var_docstrings:
-                members.setdefault(name, empty)
-            for name in self._var_annotations:
-                members.setdefault(name, empty)
-
-            members, notfound = doc_ast.sort_by_source(self.obj, {}, members)
-            members.update(notfound)
-
-        return members
+        pass
 
     @cached_property
     def variables(self) -> list[Variable]:
         """
         A list of all documented module level variables.
         """
-        return [x for x in self.members.values() if isinstance(x, Variable)]
+        pass
 
     @cached_property
     def classes(self) -> list[Class]:
         """
         A list of all documented module level classes.
         """
-        return [x for x in self.members.values() if isinstance(x, Class)]
+        pass
 
     @cached_property
     def functions(self) -> list[Function]:
         """
         A list of all documented module level functions.
         """
-        return [x for x in self.members.values() if isinstance(x, Function)]
+        pass
 
 
 class Class(Namespace[type]):
@@ -593,203 +376,41 @@ class Class(Namespace[type]):
 
     @cached_property
     def docstring(self) -> str:
-        doc = Doc.docstring.__get__(self)  # type: ignore
-        if doc == dict.__doc__:
-            # Don't display default docstring for dict subclasses (primarily TypedDict).
-            return ""
-        if doc in _Enum_default_docstrings:
-            # Don't display default docstring for enum subclasses.
-            return ""
-        if dataclasses.is_dataclass(self.obj) and doc.startswith(self.obj.__name__):
-            try:
-                sig = inspect.signature(self.obj)
-            except Exception:
-                pass
-            else:
-                # from https://github.com/python/cpython/blob/3.10/Lib/dataclasses.py
-                is_dataclass_with_default_docstring = doc == self.obj.__name__ + str(
-                    sig
-                ).replace(" -> None", "")
-                if is_dataclass_with_default_docstring:
-                    return ""
-        return doc
+        pass
 
     @cached_property
     def _var_docstrings(self) -> dict[str, str]:
-        docstrings: dict[str, str] = {}
-        for cls in self._bases:
-            for name, docstr in doc_ast.walk_tree(cls).var_docstrings.items():
-                docstrings.setdefault(name, docstr)
-        return docstrings
+        pass
 
     @cached_property
     def _func_docstrings(self) -> dict[str, str]:
-        docstrings: dict[str, str] = {}
-        for cls in self._bases:
-            for name, docstr in doc_ast.walk_tree(cls).func_docstrings.items():
-                docstrings.setdefault(name, docstr)
-        return docstrings
+        pass
 
     @cached_property
     def _var_annotations(self) -> dict[str, type]:
         # this is a bit tricky: __annotations__ also includes annotations from parent classes,
         # but we need to execute them in the namespace of the parent class.
         # Our workaround for this is to walk the MRO backwards, and only update/evaluate only if the annotation changes.
-        annotations: dict[
-            str, tuple[Any, type]
-        ] = {}  # attribute -> (annotation_unresolved, annotation_resolved)
-        for cls in reversed(self._bases):
-            cls_annotations = doc_ast.walk_tree(cls).annotations.copy()
-            dynamic_annotations = _safe_getattr(cls, "__annotations__", None)
-            if isinstance(dynamic_annotations, dict):
-                for attr, unresolved_annotation in dynamic_annotations.items():
-                    cls_annotations[attr] = unresolved_annotation
-            cls_fullname = (
-                (_safe_getattr(cls, "__module__", "") or "") + "." + cls.__qualname__
-            ).lstrip(".")
-
-            new_annotations = {
-                attr: unresolved_annotation
-                for attr, unresolved_annotation in cls_annotations.items()
-                if attr not in annotations
-                or annotations[attr][0] is not unresolved_annotation
-            }
-            localns = _safe_getattr(cls, "__dict__", None)
-            for attr, t in resolve_annotations(
-                new_annotations, inspect.getmodule(cls), localns, cls_fullname
-            ).items():
-                annotations[attr] = (new_annotations[attr], t)
-
-        return {k: v[1] for k, v in annotations.items()}
+        pass
 
     @cached_property
     def _bases(self) -> tuple[type, ...]:
-        orig_bases = _safe_getattr(self.obj, "__orig_bases__", ())
-
-        if is_typeddict(self.obj):
-            if sys.version_info < (3, 12):  # pragma: no cover
-                # TypedDicts on Python <3.12 have a botched __mro__. We need to fix it.
-                return (self.obj, *orig_bases[:-1])
-            else:
-                # TypedDict on Python >=3.12 removes intermediate classes from __mro__,
-                # so we use orig_bases to recover the full mro.
-                while orig_bases and orig_bases[-1] is not TypedDict:
-                    parent_bases = _safe_getattr(orig_bases[-1], "__orig_bases__", ())
-                    if (
-                        len(parent_bases) != 1 or parent_bases in orig_bases
-                    ):  # sanity check that things look right
-                        break  # pragma: no cover
-                    orig_bases = (*orig_bases, parent_bases[0])
-
-        # __mro__ and __orig_bases__ differ between Python versions and special cases like TypedDict/NamedTuple.
-        # This here is a pragmatic approximation of what we want.
-        return (
-            *(base for base in orig_bases if isinstance(base, type)),
-            *self.obj.__mro__,
-        )
+        pass
 
     @cached_property
     def _declarations(self) -> dict[str, tuple[str, str]]:
-        decls: dict[str, tuple[str, str]] = {}
-        for cls in self._bases:
-            treeinfo = doc_ast.walk_tree(cls)
-            for name in (
-                treeinfo.var_docstrings.keys()
-                | treeinfo.func_docstrings.keys()
-                | treeinfo.annotations.keys()
-            ):
-                decls.setdefault(name, (cls.__module__, f"{cls.__qualname__}.{name}"))
-            for name in cls.__dict__:
-                decls.setdefault(name, (cls.__module__, f"{cls.__qualname__}.{name}"))
-        if decls.get("__init__", None) == ("builtins", "object.__init__"):
-            decls["__init__"] = (
-                self.obj.__module__,
-                f"{self.obj.__qualname__}.__init__",
-            )
-        return decls
+        pass
 
     def _taken_from(self, member_name: str, obj: Any) -> tuple[str, str]:
-        try:
-            return self._declarations[member_name]
-        except KeyError:  # pragma: no cover
-            # TypedDict botches __mro__ on Python <3.12 and may need special casing here.
-            # One workaround is to also specify TypedDict as a base class, see pdoc.doc.Class._bases.
-            warnings.warn(
-                f"Cannot determine where {self.fullname}.{member_name} is taken from, assuming current file."
-            )
-            return self.modulename, f"{self.qualname}.{member_name}"
+        pass
 
     @cached_property
     def own_members(self) -> list[Doc]:
-        members = self._members_by_origin.get((self.modulename, self.qualname), [])
-        if self.taken_from != (self.modulename, self.qualname):
-            # .taken_from may be != (self.modulename, self.qualname), for example when
-            # a module re-exports a class from a private submodule.
-            members += self._members_by_origin.get(self.taken_from, [])
-        return members
+        pass
 
     @cached_property
     def _member_objects(self) -> dict[str, Any]:
-        unsorted: dict[str, Any] = {}
-        for cls in self._bases:
-            for name, obj in cls.__dict__.items():
-                unsorted.setdefault(name, obj)
-        for name in self._var_docstrings:
-            unsorted.setdefault(name, empty)
-        for name in self._var_annotations:
-            unsorted.setdefault(name, empty)
-
-        init_has_no_doc = unsorted.get("__init__", object.__init__).__doc__ in (
-            None,
-            object.__init__.__doc__,
-        )
-        if init_has_no_doc:
-            if inspect.isabstract(self.obj):
-                # Special case: We don't want to show constructors for abstract base classes unless
-                # they have a custom docstring.
-                del unsorted["__init__"]
-            elif issubclass(self.obj, enum.Enum):
-                # Special case: Do not show a constructor for enums. They are typically not constructed by users.
-                # The alternative would be showing __new__, as __call__ is too verbose.
-                del unsorted["__init__"]
-            elif issubclass(self.obj, dict):
-                # Special case: Do not show a constructor for dict subclasses.
-                unsorted.pop(
-                    "__init__", None
-                )  # TypedDict subclasses may not have __init__.
-            else:
-                # Check if there's a helpful Metaclass.__call__ or Class.__new__. This dance is very similar to
-                # https://github.com/python/cpython/blob/9feae41c4f04ca27fd2c865807a5caeb50bf4fc4/Lib/inspect.py#L2359-L2376
-                call = _safe_getattr(type(self.obj), "__call__", None)
-                custom_call_with_custom_docstring = (
-                    call is not None
-                    and not isinstance(call, NonUserDefinedCallables)
-                    and call.__doc__ not in (None, object.__call__.__doc__)
-                )
-                if custom_call_with_custom_docstring:
-                    unsorted["__init__"] = call
-                else:
-                    # Does our class define a custom __new__ method?
-                    new = _safe_getattr(self.obj, "__new__", None)
-                    custom_new_with_custom_docstring = (
-                        new is not None
-                        and not isinstance(new, NonUserDefinedCallables)
-                        and new.__doc__ not in (None, object.__new__.__doc__)
-                    )
-                    if custom_new_with_custom_docstring:
-                        unsorted["__init__"] = new
-
-        sorted: dict[str, Any] = {}
-        for cls in self._bases:
-            sorted, unsorted = doc_ast.sort_by_source(cls, sorted, unsorted)
-        sorted.update(unsorted)
-
-        if _pydantic.is_pydantic_model(self.obj):
-            sorted = {
-                k: v for k, v in sorted.items() if k not in _pydantic.IGNORED_FIELDS
-            }
-
-        return sorted
+        pass
 
     @cached_property
     def bases(self) -> list[tuple[str, str, str]]:
@@ -798,28 +419,12 @@ class Class(Namespace[type]):
 
         Each parent class is represented as a `(modulename, qualname, display_text)` tuple.
         """
-        bases = []
-        for x in _safe_getattr(self.obj, "__orig_bases__", self.obj.__bases__):
-            if x is object:
-                continue
-            o = get_origin(x)
-            if o:
-                bases.append((o.__module__, o.__qualname__, str(x)))
-            elif x.__module__ == self.modulename:
-                bases.append((x.__module__, x.__qualname__, x.__qualname__))
-            else:
-                bases.append(
-                    (x.__module__, x.__qualname__, f"{x.__module__}.{x.__qualname__}")
-                )
-        return bases
+        pass
 
     @cached_property
     def decorators(self) -> list[str]:
         """A list of all decorators the class is decorated with."""
-        decorators = []
-        for t in doc_ast.parse(self.obj).decorator_list:
-            decorators.append(f"@{doc_ast.unparse(t)}")
-        return decorators
+        pass
 
     @cached_property
     def class_variables(self) -> list[Variable]:
@@ -829,57 +434,35 @@ class Class(Namespace[type]):
         Class variables are variables that are explicitly annotated with `typing.ClassVar`.
         All other variables are treated as instance variables.
         """
-        return [
-            x
-            for x in self.members.values()
-            if isinstance(x, Variable) and x.is_classvar
-        ]
+        pass
 
     @cached_property
     def instance_variables(self) -> list[Variable]:
         """
         A list of all instance variables in the class.
         """
-        return [
-            x
-            for x in self.members.values()
-            if isinstance(x, Variable) and not x.is_classvar
-        ]
+        pass
 
     @cached_property
     def classmethods(self) -> list[Function]:
         """
         A list of all documented `@classmethod`s.
         """
-        return [
-            x
-            for x in self.members.values()
-            if isinstance(x, Function) and x.is_classmethod
-        ]
+        pass
 
     @cached_property
     def staticmethods(self) -> list[Function]:
         """
         A list of all documented `@staticmethod`s.
         """
-        return [
-            x
-            for x in self.members.values()
-            if isinstance(x, Function) and x.is_staticmethod
-        ]
+        pass
 
     @cached_property
     def methods(self) -> list[Function]:
         """
         A list of all documented methods in the class that are neither static- nor classmethods.
         """
-        return [
-            x
-            for x in self.members.values()
-            if isinstance(x, Function)
-            and not x.is_staticmethod
-            and not x.is_classmethod
-        ]
+        pass
 
 
 WrappedFunction = types.FunctionType | staticmethod | classmethod
@@ -936,64 +519,33 @@ class Function(Doc[types.FunctionType]):
 
     @cached_property
     def docstring(self) -> str:
-        doc = Doc.docstring.__get__(self)  # type: ignore
-        if not doc:
-            # inspect.getdoc fails for inherited @classmethods and unbound @property descriptors.
-            # We now do an ugly dance to obtain the bound object instead,
-            # that somewhat resembles what inspect._findclass is doing.
-            cls = sys.modules.get(_safe_getattr(self.obj, "__module__", None), None)
-            for name in _safe_getattr(self.obj, "__qualname__", "").split(".")[:-1]:
-                cls = _safe_getattr(cls, name, None)
-
-            unbound = _safe_getattr(cls, "__dict__", {}).get(self.name)
-            is_classmethod_property = isinstance(unbound, classmethod) and isinstance(
-                unbound.__func__, (property, cached_property)
-            )
-            if not is_classmethod_property:
-                # We choke on @classmethod @property, but that's okay because it's been deprecated with Python 3.11.
-                # Directly accessing them would give us the return value, which has the wrong docstring.
-                doc = _safe_getdoc(_safe_getattr(cls, self.name, None))
-
-        if doc == object.__init__.__doc__:
-            # inspect.getdoc(Foo.__init__) returns the docstring, for object.__init__ if left undefined...
-            return ""
-        else:
-            return doc
+        pass
 
     @cached_property
     def is_classmethod(self) -> bool:
         """
         `True` if this function is a `@classmethod`, `False` otherwise.
         """
-        return isinstance(self.wrapped, classmethod)
+        pass
 
     @cached_property
     def is_staticmethod(self) -> bool:
         """
         `True` if this function is a `@staticmethod`, `False` otherwise.
         """
-        return isinstance(self.wrapped, staticmethod)
+        pass
 
     @cached_property
     def decorators(self) -> list[str]:
         """A list of all decorators the function is decorated with."""
-        decorators = []
-        obj: types.FunctionType = self.obj  # type: ignore
-        for t in doc_ast.parse(obj).decorator_list:
-            decorators.append(f"@{doc_ast.unparse(t)}")
-        return decorators
+        pass
 
     @cached_property
     def funcdef(self) -> str:
         """
         The string of keywords used to define the function, i.e. `"def"` or `"async def"`.
         """
-        if inspect.iscoroutinefunction(self.obj) or inspect.isasyncgenfunction(
-            self.obj
-        ):
-            return "async def"
-        else:
-            return "def"
+        pass
 
     @cached_property
     def signature(self) -> inspect.Signature:
@@ -1006,38 +558,7 @@ class Function(Doc[types.FunctionType]):
 
         If the signature cannot be determined, a placeholder Signature object is returned.
         """
-        if self.obj is object.__init__:
-            # there is a weird edge case were inspect.signature returns a confusing (self, /, *args, **kwargs)
-            # signature for the default __init__ method.
-            return inspect.Signature()
-        try:
-            sig = _PrettySignature.from_callable(self.obj)
-        except Exception:
-            return inspect.Signature(
-                [inspect.Parameter("unknown", inspect.Parameter.POSITIONAL_OR_KEYWORD)]
-            )
-        mod = inspect.getmodule(self.obj)
-        globalns = _safe_getattr(mod, "__dict__", {})
-        localns = globalns
-        for parent_cls_name in self.qualname.split(".")[:-1]:
-            parent_cls = localns.get(parent_cls_name, object)
-            localns = _safe_getattr(parent_cls, "__dict__", None)
-            if localns is None:
-                break  # pragma: no cover
-
-        if self.name == "__init__":
-            sig = sig.replace(return_annotation=empty)
-        else:
-            sig = sig.replace(
-                return_annotation=safe_eval_type(
-                    sig.return_annotation, globalns, localns, mod, self.fullname
-                )
-            )
-        for p in sig.parameters.values():
-            p._annotation = safe_eval_type(  # type: ignore
-                p.annotation, globalns, localns, mod, self.fullname
-            )
-        return sig
+        pass
 
     @cached_property
     def signature_without_self(self) -> inspect.Signature:
@@ -1045,9 +566,7 @@ class Function(Doc[types.FunctionType]):
 
         This is useful to display constructors.
         """
-        return self.signature.replace(
-            parameters=list(self.signature.parameters.values())[1:]
-        )
+        pass
 
 
 class Variable(Doc[None]):
@@ -1111,81 +630,32 @@ class Variable(Doc[None]):
     @cached_property
     def is_classvar(self) -> bool:
         """`True` if the variable is a class variable, `False` otherwise."""
-        if get_origin(self.annotation) is ClassVar:
-            return True
-        else:
-            return False
+        pass
 
     @cached_property
     def is_typevar(self) -> bool:
         """`True` if the variable is a `typing.TypeVar`, `False` otherwise."""
-        if isinstance(self.default_value, TypeVar):
-            return True
-        else:
-            return False
+        pass
 
     @cached_property
     def is_type_alias_type(self) -> bool:
         """`True` if the variable is a `typing.TypeAliasType`, `False` otherwise."""
-        return isinstance(self.default_value, TypeAliasType)
+        pass
 
     @cached_property
     def is_enum_member(self) -> bool:
         """`True` if the variable is an enum member, `False` otherwise."""
-        if isinstance(self.default_value, enum.Enum):
-            return True
-        else:
-            return False
+        pass
 
     @cached_property
     def default_value_str(self) -> str:
         """The variable's default value as a pretty-printed str."""
-        if self.default_value is empty:
-            return ""
-        if isinstance(self.default_value, TypeAliasType):
-            formatted = formatannotation(self.default_value.__value__)
-            return _remove_collections_abc(formatted)
-        elif self.annotation == TypeAlias:
-            formatted = formatannotation(self.default_value)
-            return _remove_collections_abc(formatted)
-
-        # This is not perfect, but a solid attempt at preventing accidental leakage of secrets.
-        # If you have input on how to improve the heuristic, please send a pull request!
-        value_taken_from_env_var = (
-            isinstance(self.default_value, str)
-            and len(self.default_value) >= 8
-            and self.default_value in _environ_lookup()
-        )
-        if value_taken_from_env_var and not os.environ.get("PDOC_DISPLAY_ENV_VARS", ""):
-            env_var = "$" + _environ_lookup()[self.default_value]
-            warnings.warn(
-                f"The default value of {self.fullname} matches the {env_var} environment variable. "
-                f"To prevent accidental leakage of secrets, the default value is not displayed. "
-                f"Disable this behavior by setting PDOC_DISPLAY_ENV_VARS=1 as an environment variable.",
-                RuntimeWarning,
-            )
-            return env_var
-
-        try:
-            pretty = repr(self.default_value)
-        except Exception as e:
-            warnings.warn(f"repr({self.fullname}) raised an exception ({e!r})")
-            return ""
-
-        pretty = _remove_memory_addresses(pretty)
-        return pretty
+        pass
 
     @cached_property
     def annotation_str(self) -> str:
         """The variable's type annotation as a pretty-printed str."""
-        if self.annotation is not empty:
-            formatted = formatannotation(self.annotation)
-            # type aliases don't include the module name in their __repr__, so we add it here.
-            if isinstance(self.annotation, TypeAliasType):
-                formatted = f"{self.annotation.__module__}.{formatted}"
-            return f": {_remove_collections_abc(formatted)}"
-        else:
-            return ""
+        pass
 
 
 @cache
@@ -1279,43 +749,21 @@ class _PrettySignature(inspect.Signature):
 
 def _cut(x: str) -> str:
     """helper function for Doc.__repr__()"""
-    if len(x) < 20:
-        return x
-    else:
-        return x[:20] + "…"
+    pass
 
 
 def _docstr(doc: Doc) -> str:
     """helper function for Doc.__repr__()"""
-    docstr = []
-    if doc.is_inherited:
-        docstr.append(f"inherited from {'.'.join(doc.taken_from).rstrip('.')}")
-    if doc.docstring:
-        docstr.append(_cut(doc.docstring))
-    if docstr:
-        return f"  # {', '.join(docstr)}"
-    else:
-        return ""
+    pass
 
 
 def _decorators(doc: Class | Function) -> str:
     """helper function for Doc.__repr__()"""
-    if doc.decorators:
-        return " ".join(doc.decorators) + " "
-    else:
-        return ""
+    pass
 
 
 def _children(doc: Namespace) -> str:
-    children = "\n".join(
-        repr(x)
-        for x in doc.members.values()
-        if not x.name.startswith("_") or x.name == "__init__"
-    )
-    if children:
-        children += "\n"
-        children = f"\n{textwrap.indent(children, '    ')}"
-    return children
+    pass
 
 
 def _safe_getattr(obj, attr, default):

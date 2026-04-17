@@ -71,12 +71,7 @@ def embed_images(docstring: str, source_file: Path) -> str:
         return f"data:{image_mime};base64,{image_data_b64}"
 
     def embed_local_image(m: re.Match) -> str:
-        try:
-            href = local_image_to_data_uri(m["href"])
-        except Exception:
-            return m[0]
-        else:
-            return m["before"] + href + m["after"]
+        pass
 
     # TODO: Could probably do more here, e.g. support rST replacements.
     for regex in [
@@ -122,31 +117,7 @@ nevertheless.
 
 
 def _google_section(m: re.Match[str]) -> str:
-    name = m.group("name")
-    contents = dedent(m.group("contents")).lstrip()
-
-    if name in GOOGLE_LIST_SECTION_ALIASES:
-        name = GOOGLE_LIST_SECTION_ALIASES[name]
-
-    if name in GOOGLE_LIST_SECTIONS:
-        items = _indented_list(contents)
-        contents = ""
-        for item in items:
-            try:
-                # first ":" on the first line
-                _, attr, desc = re.split(r"^(.+?:)", item, maxsplit=1)
-            except ValueError:
-                contents += " - " + indent(item, "   ")[3:]
-            else:
-                contents += f" - **{attr}** " + indent(desc, "   ")[3:]
-            contents += "\n"
-    else:
-        contents = indent(contents, "> ", lambda line: True)
-
-    if name == "Args":
-        name = "Arguments"
-
-    return f"\n###### {name}:\n{contents}\n"
+    pass
 
 
 def _indented_list(contents: str) -> list[str]:
@@ -278,11 +249,7 @@ def rst(contents: str, source_file: Path | None) -> str:
     contents = _rst_links(contents)
 
     def replace_reference(m):
-        _, kind, name = m.groups()
-        if kind in ("meth", "func"):
-            return f"`{name}()`"
-        else:
-            return f"`{name}`"
+        pass
 
     # Code References: :obj:`foo` -> `foo`
     contents = re.sub(
@@ -308,15 +275,7 @@ def _rst_footnotes(contents: str) -> str:
     autonum: int
 
     def register_footnote(m: re.Match[str]) -> str:
-        nonlocal autonum
-        fn_id = m.group("id")
-        if fn_id in "*#":
-            fn_id = f"fn-{autonum}"
-            autonum += 1
-        fn_id = fn_id.lstrip("#*")
-        footnotes.add(fn_id)
-        content = indent(m.group("content"), "   ").lstrip()
-        return f"{m.group('indent')}[^{fn_id}]: {content}"
+        pass
 
     # Register footnotes
     autonum = 1
@@ -335,16 +294,7 @@ def _rst_footnotes(contents: str) -> str:
     )
 
     def replace_references(m: re.Match[str]) -> str:
-        nonlocal autonum
-        fn_id = m.group("id")
-        if fn_id in "*#":
-            fn_id = f"fn-{autonum}"
-            autonum += 1
-        fn_id = fn_id.lstrip("#*")
-        if fn_id in footnotes:
-            return f"[^{fn_id}]"
-        else:
-            return m.group(0)
+        pass
 
     autonum = 1
     contents = re.sub(r"\[(?P<id>\d+|[#*]\w*)]_", replace_references, contents)
@@ -356,17 +306,10 @@ def _rst_links(contents: str) -> str:
     links = {}
 
     def register_link(m: re.Match[str]) -> str:
-        refid = re.sub(r"\s", "", m.group("id").lower())
-        links[refid] = m.group("url")
-        return ""
+        pass
 
     def replace_link(m: re.Match[str]) -> str:
-        text = m.group("id")
-        refid = re.sub(r"[\s`]", "", text.lower())
-        try:
-            return f"[{text.strip('`')}]({links[refid]})"
-        except KeyError:
-            return m.group(0)
+        pass
 
     # Embedded URIs
     contents = re.sub(
@@ -422,56 +365,7 @@ def _rst_admonitions(contents: str, source_file: Path | None) -> str:
     """
 
     def _rst_admonition(m: re.Match[str]) -> str:
-        ind = m.group("indent")
-        type = m.group("type")
-        val = m.group("val").strip()
-        contents = dedent(m.group("contents")).strip()
-        contents, options = _rst_extract_options(contents)
-
-        if type == "include":
-            loc = source_file or Path(".")
-            try:
-                included = (loc.parent / val).read_text("utf8", "replace")
-            except OSError as e:
-                warnings.warn(f"Cannot include {val!r}: {e}")
-                included = "\n"
-            try:
-                included = _rst_include_trim(included, options) + "\n"
-            except ValueError as e:
-                warnings.warn(f"Failed to process include options for {val!r}: {e}")
-            included = _rst_admonitions(included, loc.parent / val)
-            included = embed_images(included, loc.parent / val)
-            return indent(included, ind)
-        if type == "math":
-            return f"{ind}$${val}{contents}$$\n"
-        if type in ("note", "warning", "danger"):
-            if val:
-                heading = f"{ind}###### {val}\n"
-            else:
-                heading = ""
-            return (
-                f'{ind}<div class="alert {type}" markdown="1">\n'
-                f"{heading}"
-                f"{indent(contents, ind)}\n"
-                f"{ind}</div>\n"
-            )
-        if type == "code-block":
-            return f"{ind}```{val}\n{contents}\n```\n"
-        if type == "versionadded":
-            text = f"New in version {val}"
-        elif type == "versionchanged":
-            text = f"Changed in version {val}"
-        elif type == "deprecated":
-            text = f"Deprecated since version {val}"
-        else:
-            text = f"{type} {val}".strip()
-
-        if contents:
-            text = f"{ind}*{text}:*\n{indent(contents, ind)}\n\n"
-        else:
-            text = f"{ind}*{text}.*\n"
-
-        return text
+        pass
 
     admonition = "note|warning|danger|versionadded|versionchanged|deprecated|seealso|math|include|code-block"
     return re.sub(
@@ -499,37 +393,7 @@ def _rst_fields(contents: str) -> str:
     _has_raises_section = False
 
     def _rst_field(m: re.Match[str]) -> str:
-        type = m["type"]
-        body = m["body"]
-
-        if m["name"]:
-            name = f"**{m['name'].strip()}**: "
-        else:
-            name = ""
-
-        if type == "param":
-            nonlocal _has_parameter_section
-            text = f" - {name}{body}"
-            if not _has_parameter_section:
-                _has_parameter_section = True
-                text = "\n###### Parameters\n" + text
-            return text
-        elif type == "type":
-            return ""  # we expect users to use modern type annotations.
-        elif type == "return":
-            body = indent(body, "> ", lambda line: True)
-            return f"\n###### Returns\n{body}"
-        elif type == "rtype":
-            return ""  # we expect users to use modern type annotations.
-        elif type == "raises":
-            nonlocal _has_raises_section
-            text = f" - {name}{body}"
-            if not _has_raises_section:
-                _has_raises_section = True
-                text = "\n###### Raises\n" + text
-            return text
-        else:  # pragma: no cover
-            raise AssertionError("unreachable")
+        pass
 
     field = "param|type|return|rtype|raises"
     return re.sub(

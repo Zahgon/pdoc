@@ -30,75 +30,14 @@ class DocHandler(http.server.BaseHTTPRequestHandler):
     """A reference to the main web server."""
 
     def do_HEAD(self):
-        try:
-            return self.handle_request()
-        except ConnectionError:  # pragma: no cover
-            pass
+        pass
 
     def do_GET(self):
-        try:
-            self.wfile.write(self.handle_request().encode())
-        except ConnectionError:  # pragma: no cover
-            pass
+        pass
 
     def handle_request(self) -> str:
         """Actually handle a request. Called by `do_HEAD` and `do_GET`."""
-        path = self.path.split("?", 1)[0]
-
-        if path == "/" or path == "/index.html":
-            out = render.html_index(self.server.all_modules)
-        elif path == "/search.js":
-            self.send_response(200)
-            self.send_header("content-type", "application/javascript")
-            self.end_headers()
-            return self.server.render_search_index()
-        elif "." in path.removesuffix(".html"):
-            # See https://github.com/mitmproxy/pdoc/issues/615: All module separators should be normalized to "/".
-            # We could redirect here, but that would create the impression of a working link, which will fall apart
-            # when pdoc prerenders to static HTML. So we rather fail early.
-            self.send_response(404)
-            self.end_headers()
-            return "Not Found: Please normalize all module separators to '/'."
-        else:
-            module_name = path.lstrip("/").removesuffix(".html").replace("/", ".")
-            module_name = urllib.parse.unquote(module_name)
-            if module_name not in self.server.all_modules:
-                self.send_response(404)
-                self.send_header("content-type", "text/html")
-                self.end_headers()
-                return render.html_error(error=f"Module {module_name!r} not found")
-
-            mtime = ""
-            t = extract.module_mtime(module_name)
-            if t:
-                mtime = f"{t:.1f}"
-            if "mtime=1" in self.path:
-                self.send_response(200)
-                self.send_header("content-type", "text/plain")
-                self.end_headers()
-                return mtime
-
-            try:
-                extract.invalidate_caches(module_name)
-                mod = self.server.all_modules[module_name]
-                out = render.html_module(
-                    module=mod,
-                    all_modules=self.server.all_modules,
-                    mtime=mtime,
-                )
-            except Exception:
-                self.send_response(500)
-                self.send_header("content-type", "text/html")
-                self.end_headers()
-                return render.html_error(
-                    error=f"Error importing {module_name!r}",
-                    details=traceback.format_exc(),
-                )
-
-        self.send_response(200)
-        self.send_header("content-type", "text/html")
-        self.end_headers()
-        return out
+        pass
 
     def log_request(self, code: int | str = ..., size: int | str = ...) -> None:
         """Override logging to disable it."""
@@ -117,15 +56,7 @@ class DocServer(http.server.HTTPServer):
     @cache
     def render_search_index(self) -> str:
         """Render the search index. For performance reasons this is always cached."""
-        # Some modules may not be importable, which means that they would raise an RuntimeError
-        # when accessed. We "fix" this by pre-loading all modules here and only passing the ones that work.
-        all_modules_safe = {}
-        for mod in self.all_modules:
-            try:
-                all_modules_safe[mod] = doc.Module.from_name(mod)
-            except RuntimeError:
-                warnings.warn(f"Error importing {mod!r}:\n{traceback.format_exc()}")
-        return render.search_index(all_modules_safe)
+        pass
 
 
 class AllModules(Mapping[str, doc.Module]):

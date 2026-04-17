@@ -26,12 +26,7 @@ warnings or that are not relevant to users of BaseModel-derived classes."""
 
 def is_pydantic_model(obj: ClassOrModule) -> TypeGuard[pydantic.BaseModel]:
     """Returns whether an object is a Pydantic model."""
-    if pydantic is None:  # pragma: no cover
-        # classes that subclass pydantic.BaseModel can only be instantiated if pydantic is importable
-        # => if we cannot import pydantic, the passed object cannot be a subclass of BaseModel.
-        return False
-
-    return isinstance(obj, type) and issubclass(obj, pydantic.BaseModel)
+    pass
 
 
 def default_value(parent: ClassOrModule, name: str, obj: Any) -> Any:
@@ -40,17 +35,8 @@ def default_value(parent: ClassOrModule, name: str, obj: Any) -> Any:
     For pydantic BaseModels, extract the default value from field metadata.
     For all other objects, return `obj` as-is.
     """
-    if is_pydantic_model(parent):
-        pydantic_fields = parent.__pydantic_fields__
-        return pydantic_fields[name].default if name in pydantic_fields else obj
-
-    return obj
+    pass
 
 
 def get_field_docstring(parent: ClassOrModule, field_name: str) -> str | None:
-    if is_pydantic_model(parent):
-        if field := parent.__pydantic_fields__.get(field_name, None):
-            return field.description
-        if computed := parent.__pydantic_computed_fields__.get(field_name, None):
-            return computed.description
-    return None
+    pass

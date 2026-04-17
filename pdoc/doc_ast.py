@@ -80,7 +80,7 @@ def parse(obj):
 @cache
 def unparse(tree: ast.AST):
     """`ast.unparse`, but cached."""
-    return ast.unparse(tree)
+    pass
 
 
 @dataclass
@@ -101,55 +101,14 @@ def walk_tree(obj: types.ModuleType | type) -> AstInfo:
     """
     Walks the abstract syntax tree for `obj` and returns the extracted information.
     """
-    return _walk_tree(parse(obj))
+    pass
 
 
 @cache
 def _walk_tree(
     tree: ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> AstInfo:
-    var_docstrings = {}
-    func_docstrings = {}
-    annotations = {}
-    for a, b in _pairwise_longest(_nodes(tree)):
-        if isinstance(a, ast_TypeAlias):
-            name = a.name.id
-        elif (
-            isinstance(a, ast.AnnAssign) and isinstance(a.target, ast.Name) and a.simple
-        ):
-            name = a.target.id
-            annotations[name] = unparse(a.annotation)
-        elif (
-            isinstance(a, ast.Assign)
-            and len(a.targets) == 1
-            and isinstance(a.targets[0], ast.Name)
-        ):
-            name = a.targets[0].id
-            # Make sure that all assignments are picked up, even is there is
-            # no annotation or docstring.
-            annotations.setdefault(name, pdoc.doc_types.empty)
-        elif isinstance(a, ast.FunctionDef) and a.body:
-            first = a.body[0]
-            if (
-                isinstance(first, ast.Expr)
-                and isinstance(first.value, ast.Constant)
-                and isinstance(first.value.value, str)
-            ):
-                func_docstrings[a.name] = inspect.cleandoc(first.value.value).strip()
-            continue
-        else:
-            continue
-        if (
-            isinstance(b, ast.Expr)
-            and isinstance(b.value, ast.Constant)
-            and isinstance(b.value.value, str)
-        ):
-            var_docstrings[name] = inspect.cleandoc(b.value.value).strip()
-    return AstInfo(
-        var_docstrings,
-        func_docstrings,
-        annotations,
-    )
+    pass
 
 
 T = TypeVar("T")
@@ -166,32 +125,7 @@ def sort_by_source(
 
     Returns a `(sorted, not found)` tuple.
     """
-    tree = parse(obj)
-
-    if "__init__" in unsorted:
-        sorted["__init__"] = unsorted.pop("__init__")
-
-    for a in _nodes(tree):
-        if (
-            isinstance(a, ast.Assign)
-            and len(a.targets) == 1
-            and isinstance(a.targets[0], ast.Name)
-        ):
-            name = a.targets[0].id
-        elif (
-            isinstance(a, ast.AnnAssign) and isinstance(a.target, ast.Name) and a.simple
-        ):
-            name = a.target.id
-        elif isinstance(a, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            name = a.name
-        elif isinstance(a, ast_TypeAlias):
-            name = a.name.id
-        else:
-            continue
-
-        if name in unsorted:
-            sorted[name] = unsorted.pop(name)
-    return sorted, unsorted
+    pass
 
 
 def type_checking_sections(mod: types.ModuleType) -> ast.Module:
@@ -310,14 +244,11 @@ def _nodes(tree: ast.Module | ast.ClassDef) -> list[ast.AST]:
 
     This is useful to detect all declared variables in a class, even if they only appear in the constructor.
     """
-    return list(_nodes_iter(tree))
+    pass
 
 
 def _nodes_iter(tree: ast.Module | ast.ClassDef) -> Iterator[ast.AST]:
-    for a in tree.body:
-        yield a
-        if isinstance(a, ast.FunctionDef) and a.name == "__init__":
-            yield from _init_nodes(a)
+    pass
 
 
 def _init_nodes(tree: ast.FunctionDef) -> Iterator[ast.AST]:
@@ -326,40 +257,9 @@ def _init_nodes(tree: ast.FunctionDef) -> Iterator[ast.AST]:
     keep all constant expressions, and no-op everything else.
     This essentially allows us to inline __init__ when parsing a class definition.
     """
-    for a in tree.body:
-        if (
-            isinstance(a, ast.AnnAssign)
-            and isinstance(a.target, ast.Attribute)
-            and isinstance(a.target.value, ast.Name)
-            and a.target.value.id == "self"
-        ):
-            yield ast.AnnAssign(
-                ast.Name(a.target.attr), a.annotation, a.value, simple=1
-            )
-        elif (
-            isinstance(a, ast.Assign)
-            and len(a.targets) == 1
-            and isinstance(a.targets[0], ast.Attribute)
-            and isinstance(a.targets[0].value, ast.Name)
-            and a.targets[0].value.id == "self"
-        ):
-            yield ast.Assign(
-                [ast.Name(a.targets[0].attr)],
-                value=a.value,
-                type_comment=a.type_comment,
-            )
-        elif (
-            isinstance(a, ast.Expr)
-            and isinstance(a.value, ast.Constant)
-            and isinstance(a.value.value, str)
-        ):
-            yield a
-        else:
-            yield ast.Pass()
+    pass
 
 
 def _pairwise_longest(iterable: Iterable[T]) -> Iterable[tuple[T, T]]:
     """s -> (s0,s1), (s1,s2), (s2, s3),  ..., (sN, None)"""
-    a, b = tee(iterable)
-    next(b, None)
-    return zip_longest(a, b)
+    pass

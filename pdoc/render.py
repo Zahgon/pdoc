@@ -128,10 +128,7 @@ def html_index(all_modules: Mapping[str, pdoc.doc.Module]) -> str:
 @defuse_unsafe_reprs()
 def html_error(error: str, details: str = "") -> str:
     """Renders an error message."""
-    return env.get_template("error.html.jinja2").render(
-        error=error,
-        details=details,
-    )
+    pass
 
 
 @defuse_unsafe_reprs()
@@ -165,7 +162,7 @@ def search_index(all_modules: Mapping[str, pdoc.doc.Module]) -> str:
 @defuse_unsafe_reprs()
 def repr_module(module: pdoc.doc.Module) -> str:
     """Renders `repr(pdoc.doc.Module)`, primarily used for tests and debugging."""
-    return repr(module)
+    pass
 
 
 _default_searchpath = [
